@@ -22,7 +22,7 @@ function RootNavigator() {
   }
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="index" />
       <Stack.Screen
         name="user/[id]"
         options={{ headerShown: true, title: '' }}
@@ -34,7 +34,7 @@ function RootNavigator() {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
-  <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>

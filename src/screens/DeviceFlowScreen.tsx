@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,9 @@ import {
   Alert,
   Modal,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   TextInput,
+  Keyboard,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useUserDevices } from '../hooks/useUserDevices';
@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { toast, Toaster } from 'sonner-native';
+import axios from 'axios';
 
 type Props = {
   user: SelectUser;
@@ -69,8 +70,27 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
   const [manualCode, setManualCode] = useState('');
 
   const [verifiedIds, setVerifiedIds] = useState<Set<number>>(new Set());
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const { id } = useLocalSearchParams();
+
+  // Klaviatura balandligini kuzatish
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const pendingDevices = useMemo(
     () => (data ?? []).filter((d) => !verifiedIds.has(d.id)),
@@ -109,10 +129,22 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
               toast.success('Tasdiqlandi!', { description: res.message });
               setScannerOpen(false);
 
+            } else if (!res.success) {
+              toast.error('Topilmadi', {
+                description: res.message || "Bu qurilma tizimda yo'q. Avval omborga qo'shing.",
+              });
+              setScannerOpen(false);
             }
           },
-          onError: () => {
-            toast.error('Xatolik', { description: "Serverga ulanishda muammo bo'ldi." });
+          onError: (error) => {
+            if (axios.isAxiosError(error)) {
+              toast.error('Topilmadi', {
+                description: error.response?.data?.message || "Bu qurilma tizimda yo'q. Avval omborga qo'shing.",
+              });
+            } else {
+              toast.error('Xatolik', { description: "Serverga ulanishda muammo bo'ldi." });
+            }
+             setScannerOpen(false);
             setScanLock(false);
           },
         }
@@ -196,9 +228,6 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
     );
   }
 
-
-
-
   if (isError || !data) {
     return (
       <View style={styles.centerBox}>
@@ -235,17 +264,13 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
             />
             <Text style={styles.deviceName}>{device.qrCode}</Text>
             <Text style={[styles.statusLabel, { color: device.isVerified ? '#16a34a' : '#dc2626' }]}>
-              {/* {verifiedIds.has(device.id) ? '✓ Tasdiqlandi' : STATUS_LABEL[device.status]} */}
               {device.isVerified ? 'Tasdiqlangan' : 'Tasdiqlanmagan'}
             </Text>
           </View>
         ))}
 
         <Modal visible={scannerOpen} animationType="fade">
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
+          <View style={{ flex: 1 }}>
             <StatusBar style="light" />
             <Toaster position="top-center" />
 
@@ -259,15 +284,26 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
               onBarcodeScanned={handleBarcodeScanned}
             />
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.closeScannerBtn}
               onPress={() => setScannerOpen(false)}
             >
               <Text style={{ color: '#fff', fontSize: 16 }}>Yopish</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
-            {/* Qo'lda kiritish paneli */}
-            <View style={styles.manualPanel}>
+            {/* Qo'lda kiritish paneli — klaviatura balandligiga qarab ko'tariladi */}
+            <View
+              style={[
+                styles.manualPanel,
+                {
+                  bottom: manualMode
+                    ? keyboardHeight > 0
+                      ? keyboardHeight + 30
+                      : 110
+                    : 110,
+                },
+              ]}
+            >
               {!manualMode ? (
                 <TouchableOpacity
                   style={styles.manualToggleBtn}
@@ -307,6 +343,7 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
                     onPress={() => {
                       setManualMode(false);
                       setManualCode('');
+                      Keyboard.dismiss();
                     }}
                   >
                     <Text style={{ color: '#fff' }}>✕</Text>
@@ -315,24 +352,27 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
               )}
             </View>
 
-            <View style={styles.bottomControls}>
-              <TouchableOpacity
-                style={styles.controlBtn}
-                onPress={() => setFlash((p) => (p === "off" ? "on" : "off"))}
-              >
-                <Text style={{ color: "#fff", fontSize: 18 }}>
-                  {flash === "on" ? "🔦 ON" : "🔦 OFF"}
-                </Text>
-              </TouchableOpacity>
+            {/* Klaviatura ochiq bo'lganda pastki tugmalarni yashirish */}
+            {keyboardHeight === 0 && (
+              <View style={styles.bottomControls}>
+                <TouchableOpacity
+                  style={styles.controlBtn}
+                  onPress={() => setFlash((p) => (p === "off" ? "on" : "off"))}
+                >
+                  <Text style={{ color: "#fff", fontSize: 18 }}>
+                    {flash === "on" ? "🔦 ON" : "🔦 OFF"}
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.controlBtn}
-                onPress={() => setScannerOpen(false)}
-              >
-                <Text style={{ color: "#fff", fontSize: 18 }}>✕ Yopish</Text>
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
+                <TouchableOpacity
+                  style={styles.controlBtn}
+                  onPress={() => setScannerOpen(false)}
+                >
+                  <Text style={{ color: "#fff", fontSize: 18 }}>✕ Yopish</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </Modal>
       </ScrollView>
 
@@ -462,7 +502,6 @@ const styles = StyleSheet.create({
 
   manualPanel: {
     position: 'absolute',
-    bottom: 110,
     left: 20,
     right: 20,
   },
@@ -506,6 +545,3 @@ const styles = StyleSheet.create({
   },
 
 });
-
-
-

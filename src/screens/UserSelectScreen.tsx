@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
+  RefreshControl,
 } from 'react-native';
 import { useDebounce } from 'use-debounce';
 import { useUsersInfinite } from '../hooks/useUsersInfinite'; 
@@ -37,11 +38,14 @@ export default function UserSelectScreen({ onSelectUser }: Props) {
   );
 
   const handleEndReached = useCallback(() => {
-    console.log(hasNextPage ,  !isFetchingNextPage)
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const handleRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   const renderItem = useCallback(
     ({ item }: { item: SelectUser }) => (
@@ -86,6 +90,14 @@ export default function UserSelectScreen({ onSelectUser }: Props) {
           renderItem={renderItem}
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.4}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching && !isFetchingNextPage}
+              onRefresh={handleRefresh}
+              colors={['#4f46e5']}
+              tintColor="#4f46e5"
+            />
+          }
           ListEmptyComponent={
             <Text style={styles.emptyText}>Hech kim topilmadi</Text>
           }

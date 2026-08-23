@@ -8,7 +8,7 @@ export async function fetchUsersSelect(params: {
   search?: string;
 }): Promise<UsersSelectResponse> {
   const { pageParam = 1, search = '' } = params;
-  const { data } = await axiosClient.get<UsersSelectResponse>('/users/select', {
+  const { data } = await axiosClient.get<UsersSelectResponse>('/users/select/hr', {
     params: {
       page: pageParam,
       limit: PAGE_SIZE,
@@ -16,7 +16,6 @@ export async function fetchUsersSelect(params: {
     },
   });
 
-  console.log(data , 'userpage data')
   return data;
 }
 

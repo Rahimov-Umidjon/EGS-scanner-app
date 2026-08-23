@@ -1,3 +1,4 @@
+// app/index.tsx
 import { router } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,7 +22,7 @@ export default function HomeScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <StatusBar style='auto' />
+      <StatusBar style="auto" />
       <SafeAreaView style={styles.safeArea}>
         <UserSelectScreen onSelectUser={handleSelectUser} />
       </SafeAreaView>
