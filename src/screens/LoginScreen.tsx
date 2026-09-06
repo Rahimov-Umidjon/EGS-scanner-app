@@ -11,7 +11,6 @@ import {
     ActivityIndicator,
     View,
     Text,
-    Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -38,32 +37,27 @@ async function openTelegramProfile(username: string) {
             await Linking.openURL(webUrl);
         }
     } catch {
-        await Linking.openURL(webUrl).catch(() => {});
+        await Linking.openURL(webUrl).catch(() => { });
     }
 }
 
-// Warm-ink + amber identity. Ink carries authority/security, amber is the
-// single accent used sparingly — the signature moment is the card
-// overlapping the hero, plus the amber underline that draws in on focus.
+// Flat, single-accent identity: plain white canvas, one saturated violet used
+// for the mark, the button, and links only — everything else stays neutral
+// gray/ink so those three moments are what the eye catches.
 const PALETTE = {
-    ink: '#14141F',
-    inkSoft: '#23222E',
-    bg: '#FBFAF8',
-    card: '#FFFFFF',
-    accent: '#F2A93B',
-    accentDeep: '#D98C1F',
-    text: '#181820',
-    muted: '#8B8B9A',
-    mutedOnInk: 'rgba(255,255,255,0.6)',
-    border: '#ECE9E3',
-    error: '#E0533D',
+    bg: '#FFFFFF',
+    violet: '#208AEF',
+    violetSoft: '#DDEEFC',
+    text: '#201F26',
+    muted: '#9B98A3',
+    fieldBg: '#F4F3F6',
+    placeholder: '#ACA9B4',
+    error: '#D1503B',
     errorBg: '#FBEAE6',
-    placeholder: '#B5B4C0',
 };
 
-function FloatingField({
+function Field({
     label,
-    icon,
     value,
     onChangeText,
     secure,
@@ -77,9 +71,9 @@ function FloatingField({
     textContentType,
     returnKeyType,
     onSubmitEditing,
+    placeholder,
 }: {
     label: string;
-    icon: keyof typeof Ionicons.glyphMap;
     value: string;
     onChangeText: (t: string) => void;
     secure?: boolean;
@@ -93,39 +87,12 @@ function FloatingField({
     textContentType?: any;
     returnKeyType?: any;
     onSubmitEditing?: () => void;
+    placeholder?: string;
 }) {
-    const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
-    const underline = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        Animated.timing(anim, {
-            toValue: focused || value ? 1 : 0,
-            duration: 150,
-            useNativeDriver: false,
-        }).start();
-        Animated.timing(underline, {
-            toValue: focused ? 1 : 0,
-            duration: 220,
-            useNativeDriver: false,
-        }).start();
-    }, [focused, value]);
-
-    const labelStyle = {
-        top: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 6] }),
-        fontSize: anim.interpolate({ inputRange: [0, 1], outputRange: [15, 11] }),
-        color: focused ? PALETTE.accentDeep : PALETTE.muted,
-    };
-
     return (
         <View style={[styles.fieldWrapper, focused && styles.fieldWrapperFocused]}>
-            <Ionicons
-                name={icon}
-                size={18}
-                color={focused ? PALETTE.accentDeep : PALETTE.placeholder}
-                style={styles.fieldIcon}
-            />
             <View style={styles.fieldBody}>
-                <Animated.Text style={[styles.floatingLabel, labelStyle]}>{label}</Animated.Text>
+                <Text style={styles.fieldLabel}>{label}</Text>
                 <TextInput
                     style={styles.fieldInput}
                     value={value}
@@ -139,6 +106,7 @@ function FloatingField({
                     textContentType={textContentType}
                     returnKeyType={returnKeyType}
                     onSubmitEditing={onSubmitEditing}
+                    placeholder={placeholder}
                     placeholderTextColor={PALETTE.placeholder}
                 />
             </View>
@@ -146,20 +114,11 @@ function FloatingField({
                 <TouchableOpacity onPress={onToggleSecure} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons
                         name={secureVisible ? 'eye-off-outline' : 'eye-outline'}
-                        size={18}
-                        color={PALETTE.placeholder}
+                        size={20}
+                        color={PALETTE.muted}
                     />
                 </TouchableOpacity>
             )}
-            <Animated.View
-                style={[
-                    styles.fieldUnderline,
-                    {
-                        backgroundColor: PALETTE.accent,
-                        transform: [{ scaleX: underline }],
-                    },
-                ]}
-            />
         </View>
     );
 }
@@ -180,21 +139,11 @@ export default function LoginScreen() {
     const animatePress = (toValue: number) =>
         Animated.spring(pressScale, { toValue, useNativeDriver: true, speed: 30, bounciness: 6 }).start();
 
-    // Entrance sequence: hero settles first, then the card rises and fades
-    // in on top of it — a single orchestrated moment instead of scattered effects.
-    const heroFade = useRef(new Animated.Value(0)).current;
-    const cardFade = useRef(new Animated.Value(0)).current;
-    const cardRise = useRef(new Animated.Value(18)).current;
+    const fadeIn = useRef(new Animated.Value(0)).current;
     const errorFade = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        Animated.sequence([
-            Animated.timing(heroFade, { toValue: 1, duration: 380, useNativeDriver: true }),
-            Animated.parallel([
-                Animated.timing(cardFade, { toValue: 1, duration: 320, useNativeDriver: true }),
-                Animated.spring(cardRise, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 6 }),
-            ]),
-        ]).start();
+        Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     }, []);
 
     useEffect(() => {
@@ -227,115 +176,109 @@ export default function LoginScreen() {
 
     return (
         <View style={styles.container}>
-            <StatusBar style="auto" />
+            <StatusBar style="dark" />
 
-            <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+            <SafeAreaView style={{ flex: 1 }}>
                 <KeyboardAvoidingView
                     style={styles.flex}
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
                 >
                     <ScrollView
                         contentContainerStyle={styles.scrollContent}
                         keyboardShouldPersistTaps="handled"
                         showsVerticalScrollIndicator={false}
                     >
-                        <Animated.View style={[styles.hero, { opacity: heroFade }]}>
-                            <View style={styles.logoMark}>
-                                <Image
-                                    source={require('@/assets/images/Gemini_Generated_Image_8fukyb8fukyb8fuk__1_-removebg-preview.png')}
-                                    style={{ width: 100, height: 100 }}
-                                    resizeMode="contain"
-                                />
+                        <Animated.View style={[styles.flexGrow, { opacity: fadeIn }]}>
+                            <View style={styles.badgeArea}>
+                                <View style={[styles.dot, styles.dotTopRight]} />
+                                <View style={[styles.dot, styles.dotLeft]} />
+                                <View style={[styles.dot, styles.dotBottomRight]} />
+
+                                <View style={styles.shield}>
+                                    <Ionicons name="shield-outline" size={72} color={PALETTE.violet} />
+                                    <Ionicons
+                                        name="lock-closed"
+                                        size={26}
+                                        color={PALETTE.violet}
+                                        style={styles.shieldLock}
+                                    />
+                                </View>
                             </View>
 
-                            <Text style={styles.heroTitle}>Xush kelibsiz</Text>
+                            <Text style={styles.title}>Welcome to Saifty!</Text>
+                            <Text style={styles.subtitle}>Keep your data safe!</Text>
 
-                        </Animated.View>
+                            <View style={styles.form}>
+                                <Field
+                                    label="Email"
+                                    value={email}
+                                    onChangeText={(t) => {
+                                        setEmail(t);
+                                        if (errorMessage) setErrorMessage(null);
+                                    }}
+                                    focused={focusedField === 'email'}
+                                    onFocus={() => setFocusedField('email')}
+                                    onBlur={() => setFocusedField(null)}
+                                    keyboardType="email-address"
+                                    textContentType="emailAddress"
+                                    returnKeyType="next"
+                                    placeholder="you@example.com"
+                                />
 
-                        <Animated.View
-                            style={[
-                                styles.card,
-                                {
-                                    opacity: cardFade,
-                                    transform: [{ translateY: cardRise }],
-                                },
-                            ]}
-                        >
-                            <FloatingField
-                                label="Email"
-                                icon="mail-outline"
-                                value={email}
-                                onChangeText={(t) => {
-                                    setEmail(t);
-                                    if (errorMessage) setErrorMessage(null);
-                                }}
-                                focused={focusedField === 'email'}
-                                onFocus={() => setFocusedField('email')}
-                                onBlur={() => setFocusedField(null)}
-                                keyboardType="email-address"
-                                textContentType="emailAddress"
-                                returnKeyType="next"
-                            />
+                                <View style={{ height: 14 }} />
 
-                            <View style={{ height: 20 }} />
+                                <Field
+                                    label="Password"
+                                    value={password}
+                                    onChangeText={(t) => {
+                                        setPassword(t);
+                                        if (errorMessage) setErrorMessage(null);
+                                    }}
+                                    secure
+                                    showSecureToggle
+                                    secureVisible={showPassword}
+                                    onToggleSecure={() => setShowPassword((v) => !v)}
+                                    focused={focusedField === 'password'}
+                                    onFocus={() => setFocusedField('password')}
+                                    onBlur={() => setFocusedField(null)}
+                                    textContentType="password"
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleSubmit}
+                                    placeholder="••••••••••"
+                                />
 
-                            <FloatingField
-                                label="Parol"
-                                icon="lock-closed-outline"
-                                value={password}
-                                onChangeText={(t) => {
-                                    setPassword(t);
-                                    if (errorMessage) setErrorMessage(null);
-                                }}
-                                secure
-                                showSecureToggle
-                                secureVisible={showPassword}
-                                onToggleSecure={() => setShowPassword((v) => !v)}
-                                focused={focusedField === 'password'}
-                                onFocus={() => setFocusedField('password')}
-                                onBlur={() => setFocusedField(null)}
-                                textContentType="password"
-                                returnKeyType="done"
-                                onSubmitEditing={handleSubmit}
-                            />
+                                {errorMessage && (
+                                    <Animated.View style={[styles.errorBox, { opacity: errorFade }]}>
+                                        <Ionicons name="alert-circle" size={16} color={PALETTE.error} />
+                                        <Text style={styles.errorText}>{errorMessage}</Text>
+                                    </Animated.View>
+                                )}
 
-                            <TouchableOpacity
-                                style={styles.forgotLink}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                onPress={handleForgotPassword}
-                            >
-                                <Text style={styles.forgotText}>Parolni unutdingizmi?</Text>
-                            </TouchableOpacity>
-
-                            {errorMessage && (
-                                <Animated.View style={[styles.errorBox, { opacity: errorFade }]}>
-                                    <Ionicons name="alert-circle" size={16} color={PALETTE.error} />
-                                    <Text style={styles.errorText}>{errorMessage}</Text>
+                                <Animated.View style={{ transform: [{ scale: pressScale }], marginTop: 20 }}>
+                                    <TouchableOpacity
+                                        activeOpacity={0.9}
+                                        onPress={handleSubmit}
+                                        onPressIn={() => canSubmit && animatePress(0.97)}
+                                        onPressOut={() => animatePress(1)}
+                                        disabled={!canSubmit}
+                                        style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+                                    >
+                                        {isSubmitting ? (
+                                            <ActivityIndicator color="#FFFFFF" />
+                                        ) : (
+                                            <Text style={styles.submitBtnText}>Login</Text>
+                                        )}
+                                    </TouchableOpacity>
                                 </Animated.View>
-                            )}
 
-                            <Animated.View style={{ transform: [{ scale: pressScale }] }}>
                                 <TouchableOpacity
-                                    activeOpacity={0.9}
-                                    onPress={handleSubmit}
-                                    onPressIn={() => canSubmit && animatePress(0.97)}
-                                    onPressOut={() => animatePress(1)}
-                                    disabled={!canSubmit}
-                                    style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+                                    style={styles.forgotLink}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    onPress={handleForgotPassword}
                                 >
-                                    {isSubmitting ? (
-                                        <ActivityIndicator color={PALETTE.ink} />
-                                    ) : (
-                                        <>
-                                            <Text style={styles.submitBtnText}>Kirish</Text>
-                                            <Ionicons name="arrow-forward" size={18} color={PALETTE.ink} style={{ marginLeft: 6 }} />
-                                        </>
-                                    )}
+                                    <Text style={styles.forgotText}>Forgot password?</Text>
                                 </TouchableOpacity>
-                            </Animated.View>
-
-                             
+                            </View>
                         </Animated.View>
                     </ScrollView>
                 </KeyboardAvoidingView>
@@ -347,113 +290,82 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: PALETTE.bg },
     flex: { flex: 1 },
+    flexGrow: { flexGrow: 1 },
 
     scrollContent: {
         flexGrow: 1,
-        paddingTop: 65,
-        // justifyContent: 'center',
-        paddingBottom: 32,
+        paddingHorizontal: 26,
+        paddingTop: 56,
+        paddingBottom: 40,
     },
 
-    // Hero: full ink block, rounded bottom, holds the brand identity that
-    // was previously missing from the screen entirely.
-    hero: {
-        backgroundColor: PALETTE.bg,
-        borderBottomLeftRadius: 40,
-        borderBottomRightRadius: 40,
-        // paddingTop: 36,
-        paddingBottom: 20,
-        paddingHorizontal: 28,
-        alignItems: 'center',
-    },
-    logoMark: {
-        width: 110,
-        height: 100,
-        borderRadius: 16,
-        backgroundColor: PALETTE.accent,
+    badgeArea: {
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 18,
-    },
-    heroEyebrow: {
-        fontSize: 11,
-        fontWeight: '700',
-        letterSpacing: 2.5,
-        color: PALETTE.accent,
+        height: 120,
         marginBottom: 8,
     },
-    heroTitle: {
-        fontSize: 26,
-        lineHeight: 32,
+    shield: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    shieldLock: {
+        position: 'absolute',
+    },
+    dot: {
+        position: 'absolute',
+        borderRadius: 999,
+        backgroundColor: PALETTE.violetSoft,
+    },
+    dotTopRight: { width: 14, height: 14, top: 8, right: '30%' },
+    dotLeft: { width: 10, height: 10, left: '22%', top: '48%' },
+    dotBottomRight: { width: 18, height: 18, right: '20%', bottom: 4 },
+
+    title: {
+        fontSize: 21,
         fontWeight: '700',
         color: PALETTE.text,
+        textAlign: 'center',
         marginBottom: 6,
     },
-    heroSubtitle: {
-        fontSize: 13,
-        color: PALETTE.mutedOnInk,
+    subtitle: {
+        fontSize: 14,
+        color: PALETTE.muted,
         textAlign: 'center',
+        marginBottom: 32,
     },
- 
-    card: {
-        backgroundColor: PALETTE.card,
-        marginHorizontal: 20,
-        marginTop: 0,
-        borderRadius: 8,
-        padding: 26,
-        shadowColor: PALETTE.placeholder,
-        shadowOpacity: 0.14,
-        shadowRadius: 28,
-        shadowOffset: { width: 0, height: 14 },
-        elevation: 20,
+
+    form: {
+        width: '100%',
     },
 
     fieldWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingBottom: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: 'transparent',
+        backgroundColor: PALETTE.fieldBg,
+        borderRadius: 14,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderWidth: 1.5,
+        borderColor: 'transparent',
     },
     fieldWrapperFocused: {
-        // subtle lift so the focused field reads clearly without relying on
-        // the underline animation alone
-    },
-    fieldIcon: {
-        marginRight: 12,
+        borderColor: PALETTE.violet,
+        backgroundColor: PALETTE.bg,
     },
     fieldBody: {
         flex: 1,
     },
-    floatingLabel: {
-        position: 'absolute',
-        left: 0,
-        fontWeight: '600',
+    fieldLabel: {
+        fontSize: 12,
+        color: PALETTE.muted,
+        marginBottom: 2,
     },
     fieldInput: {
         fontSize: 15,
-        color: PALETTE.text,
-        paddingTop: 22,
-        paddingBottom: 4,
-    },
-    fieldUnderline: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 2,
-        borderRadius: 1,
-    },
-
-    forgotLink: {
-        alignSelf: 'flex-end',
-        marginTop: 12,
-        marginBottom: 4,
-    },
-    forgotText: {
-        fontSize: 13,
-        color: PALETTE.accentDeep,
         fontWeight: '600',
+        color: PALETTE.text,
+        padding: 0,
     },
 
     errorBox: {
@@ -462,7 +374,7 @@ const styles = StyleSheet.create({
         gap: 6,
         marginTop: 14,
         backgroundColor: PALETTE.errorBg,
-        borderRadius: 10,
+        borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 10,
     },
@@ -473,35 +385,28 @@ const styles = StyleSheet.create({
     },
 
     submitBtn: {
-        marginTop: 24,
-        backgroundColor: PALETTE.accent,
-        borderRadius: 14,
-        paddingVertical: 15,
-        flexDirection: 'row',
+        backgroundColor: PALETTE.violet,
+        borderRadius: 16,
+        paddingVertical: 17,
         alignItems: 'center',
         justifyContent: 'center',
     },
     submitBtnDisabled: {
-        backgroundColor: '#EFE4CE',
+        backgroundColor: PALETTE.violetSoft,
     },
     submitBtnText: {
-        color: PALETTE.ink,
+        color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '700',
     },
 
-    footerRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginTop: 22,
+    forgotLink: {
+        alignSelf: 'center',
+        marginTop: 16,
     },
-    footerText: {
-        fontSize: 13,
-        color: PALETTE.muted,
-    },
-    footerLink: {
-        fontSize: 13,
-        color: PALETTE.accentDeep,
-        fontWeight: '700',
+    forgotText: {
+        fontSize: 13.5,
+        color: PALETTE.violet,
+        fontWeight: '600',
     },
 });
