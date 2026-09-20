@@ -161,9 +161,13 @@ export default function LoginScreen() {
         try {
             await login(email.trim(), password);
         } catch (err: any) {
+            console.log('LOGIN ERROR:', JSON.stringify(err, null, 2));
+            console.log('ERROR MESSAGE:', err?.message);
+            console.log('ERROR CODE:', err?.code);
+
             const serverMessage = err?.response?.data?.message;
             setErrorMessage(
-                serverMessage || "Email yoki parol noto'g'ri. Qaytadan urinib ko'ring."
+                serverMessage || err?.message || "Email yoki parol noto'g'ri. Qaytadan urinib ko'ring."
             );
         } finally {
             setIsSubmitting(false);
@@ -205,7 +209,7 @@ export default function LoginScreen() {
                                 </View>
                             </View>
 
-                            <Text style={styles.title}>Welcome to Saifty!</Text>
+                            <Text style={styles.title}>Welcome to App!</Text>
                             <Text style={styles.subtitle}>Keep your data safe!</Text>
 
                             <View style={styles.form}>

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
   Keyboard,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import TextRecognition from '@react-native-ml-kit/text-recognition';
+import { File } from 'expo-file-system';
 import { useUserDevices } from '../hooks/useUserDevices';
 import { useVerifyDevice } from '../hooks/useVerifyDevice';
 import { useAssignDevice } from '../hooks/useAssignDevice';
@@ -29,6 +31,17 @@ type Props = {
 };
 
 type ScanMode = 'verify' | 'assign';
+
+// Rasmdan o'qilgan matn ichidan "EGS-000528" kabi inventar kodini ajratib oladi.
+// Shtrix kod shikastlangan bo'lsa ham, uning tagidagi matn OCR orqali o'qib olinadi.
+function extractInventoryCode(text: string): string | null {
+  const normalized = text.toUpperCase().replace(/\s+/g, ' ');
+  const matches = normalized.match(/[A-Z]{2,}[\s-]{0,2}\d{3,}/g);
+  if (!matches || matches.length === 0) return null;
+
+  const best = matches.sort((a, b) => b.length - a.length)[0];
+  return best.replace(/\s+/g, '-').replace(/-{2,}/g, '-');
+}
 
 export const STATUS_LABEL: Record<DeviceStatus, string> = {
   in_stock: "Omborda",
@@ -68,6 +81,8 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
 
   const [manualMode, setManualMode] = useState(false);
   const [manualCode, setManualCode] = useState('');
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const cameraRef = useRef<CameraView>(null);
 
   const [verifiedIds, setVerifiedIds] = useState<Set<number>>(new Set());
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -192,6 +207,8 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
       if (!code.trim()) return;
       setScanLock(true);
 
+      console.log(`[API ga yuborilayotgan kod] mode=${scanMode} code="${code.trim()}"`);
+
       if (scanMode === 'verify') {
         handleVerifyScan(code.trim());
       } else {
@@ -218,6 +235,51 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
     processCode(manualCode);
     setManualCode('');
   }, [manualCode, processCode]);
+
+  // Shtrix kod shikastlangan bo'lsa, kamerani kod tagidagi matnga qaratib
+  // suratga olamiz va OCR orqali matnni o'qib, tasdiqlash uchun maydonga qo'yamiz.
+  const handleOcrScan = useCallback(async () => {
+    if (!cameraRef.current || ocrLoading || scanLock) return;
+
+    setOcrLoading(true);
+    let photoUri: string | undefined;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.5, skipProcessing: true });
+      if (!photo?.uri) {
+        throw new Error('no-photo');
+      }
+      photoUri = photo.uri;
+
+      const result = await TextRecognition.recognize(photo.uri);
+      const code = extractInventoryCode(result.text);
+
+      console.log(`[OCR] o'qilgan xom matn: "${result.text}"`);
+      console.log(`[OCR] ajratilgan kod: "${code ?? 'topilmadi'}"`);
+
+      if (code) {
+        setManualMode(true);
+        setManualCode(code);
+        toast.success('Matn topildi', { description: code });
+      } else {
+        toast.error('Matn topilmadi', {
+          description: "Kodga yaqinroq va yorug'roq joyda qayta urinib ko'ring",
+        });
+      }
+    } catch {
+      toast.error('Xatolik', { description: "Rasmni o'qib bo'lmadi, qayta urinib ko'ring" });
+    } finally {
+      // Vaqtinchalik suratni kesh papkasidan darhol o'chiramiz — aks holda
+      // har bir OCR urinishi telefon xotirasida rasm to'plab boradi.
+      if (photoUri) {
+        try {
+          new File(photoUri).delete();
+        } catch {
+          // fayl allaqachon yo'q bo'lishi mumkin, e'tiborsiz qoldiramiz
+        }
+      }
+      setOcrLoading(false);
+    }
+  }, [ocrLoading, scanLock]);
 
 
   if (isLoading) {
@@ -275,6 +337,7 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
             <Toaster position="top-center" />
 
             <CameraView
+              ref={cameraRef}
               style={{ flex: 1 }}
               facing="back"
               flash={flash}
@@ -362,6 +425,18 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
                   <Text style={{ color: "#fff", fontSize: 18 }}>
                     {flash === "on" ? "🔦 ON" : "🔦 OFF"}
                   </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.controlBtn}
+                  onPress={handleOcrScan}
+                  disabled={ocrLoading || scanLock}
+                >
+                  {ocrLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={{ color: "#fff", fontSize: 18 }}>🔤 Matn</Text>
+                  )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
