@@ -1,20 +1,34 @@
-import { UserDevicesResponse, UsersSelectResponse, VerifyBarcodeResponse } from '@/types';
-import { axiosClient } from './axiosClient'; 
+import {
+  DepartmentsResponse,
+  DepartmentUsersResponse,
+  UserDevicesResponse,
+  VerifyBarcodeResponse,
+} from '@/types';
+import { axiosClient } from './axiosClient';
 
 const PAGE_SIZE = 50;
 
-export async function fetchUsersSelect(params: {
+export async function fetchDepartments(): Promise<DepartmentsResponse> {
+  const { data } = await axiosClient.get<DepartmentsResponse>('/users/select/hr');
+  return data;
+}
+
+export async function fetchDepartmentUsers(params: {
+  departmentId: number;
   pageParam?: number;
   search?: string;
-}): Promise<UsersSelectResponse> {
-  const { pageParam = 1, search = '' } = params;
-  const { data } = await axiosClient.get<UsersSelectResponse>('/users/select/hr', {
-    params: {
-      page: pageParam,
-      limit: PAGE_SIZE,
-      search: search || undefined,
-    },
-  });
+}): Promise<DepartmentUsersResponse> {
+  const { departmentId, pageParam = 1, search = '' } = params;
+  const { data } = await axiosClient.get<DepartmentUsersResponse>(
+    `/users/select/hr/${departmentId}`,
+    {
+      params: {
+        page: pageParam,
+        limit: PAGE_SIZE,
+        search: search || undefined,
+      },
+    }
+  );
 
   return data;
 }

@@ -10,14 +10,21 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useDebounce } from 'use-debounce';
-import { useUsersInfinite } from '../hooks/useUsersInfinite'; 
-import { SelectUser } from '@/types';
+import { useDepartmentUsersInfinite } from '../hooks/useDepartmentUsersInfinite';
+import { DepartmentUser } from '@/types';
 
 type Props = {
-  onSelectUser: (user: SelectUser) => void;
+  departmentId: number;
+  onSelectUser: (user: DepartmentUser) => void;
 };
 
-export default function UserSelectScreen({ onSelectUser }: Props) {
+function auditColor(percent: number) {
+  if (percent >= 100) return '#16a34a';
+  if (percent >= 50) return '#d97706';
+  return '#dc2626';
+}
+
+export default function DepartmentUsersScreen({ departmentId, onSelectUser }: Props) {
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch] = useDebounce(searchInput, 400);
 
@@ -30,7 +37,7 @@ export default function UserSelectScreen({ onSelectUser }: Props) {
     isError,
     refetch,
     isRefetching,
-  } = useUsersInfinite(debouncedSearch);
+  } = useDepartmentUsersInfinite(departmentId, debouncedSearch);
 
   const users = useMemo(
     () => data?.pages.flatMap((page) => page.data) ?? [],
@@ -48,7 +55,7 @@ export default function UserSelectScreen({ onSelectUser }: Props) {
   }, [refetch]);
 
   const renderItem = useCallback(
-    ({ item }: { item: SelectUser }) => (
+    ({ item }: { item: DepartmentUser }) => (
       <TouchableOpacity style={styles.userRow} onPress={() => onSelectUser(item)}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
@@ -56,9 +63,17 @@ export default function UserSelectScreen({ onSelectUser }: Props) {
             {item.lastName?.[0]}
           </Text>
         </View>
-        <Text style={styles.userName}>
-          {item.firstName} {item.lastName}
-        </Text>
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>
+            {item.firstName} {item.lastName}
+          </Text>
+          <Text style={styles.deviceCount}>
+            {item.checkedDevices}/{item.totalDevices} qurilma tekshirildi
+          </Text>
+        </View>
+        <View style={[styles.auditBadge, { backgroundColor: auditColor(item.auditPercent) }]}>
+          <Text style={styles.auditText}>{item.auditPercent}%</Text>
+        </View>
       </TouchableOpacity>
     ),
     [onSelectUser]
@@ -142,7 +157,16 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   avatarText: { color: '#fff', fontWeight: '600' },
+  userInfo: { flex: 1 },
   userName: { fontSize: 16, fontWeight: '500' },
+  deviceCount: { fontSize: 12, color: '#888', marginTop: 2 },
+  auditBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  auditText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   emptyText: { textAlign: 'center', marginTop: 32, color: '#888' },
   centerBox: { alignItems: 'center', marginTop: 32 },
   errorText: { color: 'red', marginBottom: 12 },

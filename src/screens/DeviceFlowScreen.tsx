@@ -15,12 +15,13 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
 import { File } from 'expo-file-system';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useUserDevices } from '../hooks/useUserDevices';
 import { useVerifyDevice } from '../hooks/useVerifyDevice';
 import { useAssignDevice } from '../hooks/useAssignDevice';
-import { DeviceStatus, SelectUser } from '@/types';
+import { DeviceStatus, Devices, SelectUser } from '@/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { toast, Toaster } from 'sonner-native';
 import axios from 'axios';
@@ -67,6 +68,23 @@ export const STATUS_COLOR: Record<DeviceStatus, string> = {
   in_storage: "#950cea",
 };
 
+// deviceType.name (masalan "Noutbuk", "Sichqoncha") bo'yicha mos ikonkani tanlaydi
+const DEVICE_TYPE_ICON: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  "noutbuk": "laptop",
+  "sichqoncha": "mouse",
+  "klaviatura": "keyboard",
+  "monitor": "monitor",
+  "system blok": "desktop-tower",
+  "telefon": "cellphone",
+  "quloqchin": "headphones",
+  "printer": "printer",
+};
+
+function getDeviceTypeIcon(typeName?: string): keyof typeof MaterialCommunityIcons.glyphMap {
+  if (!typeName) return "devices";
+  return DEVICE_TYPE_ICON[typeName.trim().toLowerCase()] ?? "devices";
+}
+
 export default function DeviceFlowScreen({ user, onBack }: Props) {
   const { data, isLoading, isError, refetch } = useUserDevices(user.id);
   const verifyMutation = useVerifyDevice(user.id);
@@ -77,17 +95,14 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanLock, setScanLock] = useState(false);
   const insets = useSafeAreaInsets();
-  const [flash, setFlash] = useState<'off' | 'on'>('off');
+  const [torchOn, setTorchOn] = useState(false);
 
   const [manualMode, setManualMode] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [ocrLoading, setOcrLoading] = useState(false);
   const cameraRef = useRef<CameraView>(null);
 
-  const [verifiedIds, setVerifiedIds] = useState<Set<number>>(new Set());
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  const { id } = useLocalSearchParams();
 
   // Klaviatura balandligini kuzatish
   useEffect(() => {
@@ -108,8 +123,8 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
   }, []);
 
   const pendingDevices = useMemo(
-    () => (data ?? []).filter((d) => !verifiedIds.has(d.id)),
-    [data, verifiedIds]
+    () => (data ?? []).filter((d) => !d.isVerified),
+    [data]
   );
   const totalCount = data?.length ?? 0;
   const currentDevice = pendingDevices[0];
@@ -125,7 +140,7 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
         }
       }
       setScanMode(mode);
-      setFlash("off");
+      setTorchOn(false);
       setScanLock(false);
       setScannerOpen(true);
     },
@@ -134,10 +149,10 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
 
   const handleVerifyScan = useCallback(
     (barcode: string) => {
-      if (id == null) return;
+      if (!currentDevice) return;
 
       verifyMutation.mutate(
-        { deviceId: id, barcode },
+        { deviceId: currentDevice.id, barcode },
         {
           onSuccess: (res) => {
             if (res.success) {
@@ -165,7 +180,7 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
         }
       );
     },
-    [id, verifyMutation]
+    [currentDevice, verifyMutation]
   );
 
   const handleAssignScan = useCallback(
@@ -316,23 +331,41 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
           }}
         />
 
-        {data?.map((device) => (
+        {data?.map((device: Devices) => (
           <View key={device.id} style={styles.deviceRow}>
-            <View
+            <View style={styles.deviceTypeIcon}>
+              <MaterialCommunityIcons
+                name={getDeviceTypeIcon(device.deviceType?.name)}
+                size={22}
+                color="#4f46e5"
+              />
+            </View>
+
+            <View style={styles.deviceInfo}>
+              <Text style={styles.deviceName}>{device.deviceType?.name ?? device.qrCode}</Text>
+              <Text style={styles.deviceSubText}>
+                {device.qrCode} · {device.brand?.name}
+              </Text>
+            </View>
+
+            {/* <View
               style={[
                 styles.statusDot,
                 { backgroundColor: STATUS_COLOR[device.status] },
               ]}
+            /> */}
+
+            <Ionicons
+              name={device.isVerified ? 'checkmark-circle' : 'close-circle'}
+              size={22}
+              color={device.isVerified ? '#16a34a' : '#dc2626'}
+              style={{ marginLeft: 8 }}
             />
-            <Text style={styles.deviceName}>{device.qrCode}</Text>
-            <Text style={[styles.statusLabel, { color: device.isVerified ? '#16a34a' : '#dc2626' }]}>
-              {device.isVerified ? 'Tasdiqlangan' : 'Tasdiqlanmagan'}
-            </Text>
           </View>
         ))}
 
-        <Modal visible={scannerOpen} animationType="fade">
-          <View style={{ flex: 1 }}>
+        <Modal visible={scannerOpen} animationType="slide">
+          <View style={{ flex: 1, backgroundColor: '#000' }}>
             <StatusBar style="light" />
             <Toaster position="top-center" />
 
@@ -340,19 +373,72 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
               ref={cameraRef}
               style={{ flex: 1 }}
               facing="back"
-              flash={flash}
+              enableTorch={torchOn}
               barcodeScannerSettings={{
                 barcodeTypes: ["ean13", "ean8", "upc_a", "code128", "code39", "qr"],
               }}
               onBarcodeScanned={handleBarcodeScanned}
             />
 
-            {/* <TouchableOpacity
-              style={styles.closeScannerBtn}
-              onPress={() => setScannerOpen(false)}
-            >
-              <Text style={{ color: '#fff', fontSize: 16 }}>Yopish</Text>
-            </TouchableOpacity> */}
+            {/* Kamera ustidagi qorong'i niqob + o'rtadagi skan ramkasi */}
+            <View style={styles.scannerOverlay} pointerEvents="box-none">
+              <View style={[styles.overlayTop, { paddingTop: insets.top + 8 }]}>
+                <View style={styles.scannerTopBar}>
+                  <TouchableOpacity
+                    style={styles.iconCircleBtn}
+                    onPress={() => setScannerOpen(false)}
+                  >
+                    <Ionicons name="close" size={24} color="#fff" />
+                  </TouchableOpacity>
+
+                  <View style={styles.scannerTitleBox}>
+                    <Text style={styles.scannerTitleText}>
+                      {scanMode === 'verify' ? 'Qurilmani tekshirish' : 'Qurilmani biriktirish'}
+                    </Text>
+                    {scanMode === 'verify' && (
+                      <Text style={styles.scannerProgressText}>
+                        {doneCount}/{totalCount} tekshirildi
+                      </Text>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.iconCircleBtn, torchOn && styles.iconCircleBtnActive]}
+                    onPress={() => setTorchOn((p) => !p)}
+                  >
+                    <Ionicons
+                      name={torchOn ? 'flashlight' : 'flashlight-outline'}
+                      size={22}
+                      color={torchOn ? '#1a1a1a' : '#fff'}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.overlayMiddle}>
+                <View style={styles.overlaySide} />
+                <View style={styles.scanFrame}>
+                  <View style={[styles.scanCorner, styles.scanCornerTL]} />
+                  <View style={[styles.scanCorner, styles.scanCornerTR]} />
+                  <View style={[styles.scanCorner, styles.scanCornerBL]} />
+                  <View style={[styles.scanCorner, styles.scanCornerBR]} />
+                </View>
+                <View style={styles.overlaySide} />
+              </View>
+
+              <View style={styles.overlayBottom}>
+                <View style={styles.scanHintBox}>
+                  <Text style={styles.scanText}>
+                    QR yoki shtrix-kodni ramka ichiga joylashtiring
+                  </Text>
+                  {scanMode === 'verify' && currentDevice && (
+                    <Text style={styles.currentDeviceText}>
+                      Navbatda: {currentDevice.qrCode}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </View>
 
             {/* Qo'lda kiritish paneli — klaviatura balandligiga qarab ko'tariladi */}
             <View
@@ -362,8 +448,8 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
                   bottom: manualMode
                     ? keyboardHeight > 0
                       ? keyboardHeight + 30
-                      : 110
-                    : 110,
+                      : 130
+                    : 130,
                 },
               ]}
             >
@@ -372,6 +458,7 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
                   style={styles.manualToggleBtn}
                   onPress={() => setManualMode(true)}
                 >
+                  <Ionicons name="create-outline" size={16} color="#fbbf24" />
                   <Text style={styles.manualToggleText}>
                     Kod o'qilmayaptimi? Inventar raqamini kiriting
                   </Text>
@@ -398,7 +485,7 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
                     {scanLock ? (
                       <ActivityIndicator color="#fff" size="small" />
                     ) : (
-                      <Text style={{ color: '#fff', fontWeight: '600' }}>Yuborish</Text>
+                      <Ionicons name="arrow-up" size={20} color="#fff" />
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -409,41 +496,28 @@ export default function DeviceFlowScreen({ user, onBack }: Props) {
                       Keyboard.dismiss();
                     }}
                   >
-                    <Text style={{ color: '#fff' }}>✕</Text>
+                    <Ionicons name="close" size={18} color="#fff" />
                   </TouchableOpacity>
                 </View>
               )}
             </View>
 
-            {/* Klaviatura ochiq bo'lganda pastki tugmalarni yashirish */}
+            {/* Klaviatura ochiq bo'lganda pastki tugmani yashirish */}
             {keyboardHeight === 0 && (
               <View style={styles.bottomControls}>
                 <TouchableOpacity
-                  style={styles.controlBtn}
-                  onPress={() => setFlash((p) => (p === "off" ? "on" : "off"))}
-                >
-                  <Text style={{ color: "#fff", fontSize: 18 }}>
-                    {flash === "on" ? "🔦 ON" : "🔦 OFF"}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.controlBtn}
+                  style={styles.ocrBtn}
                   onPress={handleOcrScan}
                   disabled={ocrLoading || scanLock}
                 >
                   {ocrLoading ? (
-                    <ActivityIndicator color="#fff" size="small" />
+                    <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={{ color: "#fff", fontSize: 18 }}>🔤 Matn</Text>
+                    <>
+                      <Ionicons name="text-outline" size={22} color="#fff" />
+                      <Text style={styles.ocrBtnText}>Matnni o'qish</Text>
+                    </>
                   )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.controlBtn}
-                  onPress={() => setScannerOpen(false)}
-                >
-                  <Text style={{ color: "#fff", fontSize: 18 }}>✕ Yopish</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -486,9 +560,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e5e5e5',
   },
-  statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
-  deviceName: { flex: 1, fontSize: 16 },
-  statusLabel: { fontSize: 13, fontWeight: '600' },
+  statusDot: { width: 10, height: 10, borderRadius: 5, marginLeft: 8 },
+  deviceTypeIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#eef2ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  deviceInfo: { flex: 1 },
+  deviceName: { fontSize: 16, fontWeight: '500' },
+  deviceSubText: { fontSize: 12, color: '#888', marginTop: 2 },
   scanBtn: {
     marginTop: 24,
     backgroundColor: '#4f46e5',
@@ -508,84 +592,138 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
   },
-  closeScannerBtn: {
+  // --- Skaner oynasi ustidagi niqob + ramka ---
+  scannerOverlay: {
     position: 'absolute',
-    bottom: 32,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'space-between',
   },
   overlayTop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: 'flex-end',
-    paddingBottom: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
-  progressBox: {
+  scannerTopBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'space-between',
   },
-  progressText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+  iconCircleBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  currentDeviceText: {
-    color: '#fbbf24',
-    fontSize: 18,
-    fontWeight: '700',
+  iconCircleBtnActive: {
+    backgroundColor: '#fbbf24',
   },
-  overlayBottom: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-  },
+  scannerTitleBox: { alignItems: 'center' },
+  scannerTitleText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  scannerProgressText: { color: '#c7d2fe', fontSize: 12, marginTop: 2, fontWeight: '600' },
   overlayMiddle: {
-    flexDirection: "row",
-    height: 220,
+    flexDirection: 'row',
+    height: 240,
   },
   overlaySide: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   scanFrame: {
-    width: 280,
-    borderRadius: 16,
-    justifyContent: "flex-end",
-    alignItems: "center",
+    width: 260,
+    height: 240,
   },
+  scanCorner: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
+    borderColor: '#4f46e5',
+  },
+  scanCornerTL: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 12,
+  },
+  scanCornerTR: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 12,
+  },
+  scanCornerBL: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 12,
+  },
+  scanCornerBR: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 12,
+  },
+  overlayBottom: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    paddingTop: 20,
+  },
+  scanHintBox: { alignItems: 'center', gap: 6 },
   scanText: {
-    color: "#fff",
-    marginBottom: -35,
-    fontSize: 16,
+    color: '#fff',
+    fontSize: 14,
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
+  currentDeviceText: {
+    color: '#fbbf24',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  // --- Pastki boshqaruv tugmalari ---
   bottomControls: {
-    position: "absolute",
+    position: 'absolute',
     bottom: 40,
     left: 20,
     right: 20,
-    flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: 'center',
   },
-  controlBtn: {
-    backgroundColor: "rgba(0,0,0,0.65)",
-    paddingHorizontal: 20,
+  ocrBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(79,70,229,0.85)',
+    paddingHorizontal: 22,
     paddingVertical: 14,
     borderRadius: 30,
   },
+  ocrBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 
+  // --- Qo'lda kod kiritish paneli ---
   manualPanel: {
     position: 'absolute',
     left: 20,
     right: 20,
   },
   manualToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     backgroundColor: 'rgba(0,0,0,0.65)',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 24,
-    alignItems: 'center',
   },
   manualToggleText: {
     color: '#fbbf24',
@@ -601,22 +739,25 @@ const styles = StyleSheet.create({
   manualInput: {
     flex: 1,
     backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     fontSize: 15,
   },
   manualSubmitBtn: {
     backgroundColor: '#4f46e5',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   manualCancelBtn: {
     backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-
 });

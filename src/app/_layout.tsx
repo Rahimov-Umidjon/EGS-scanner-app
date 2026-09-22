@@ -24,6 +24,10 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen
+        name="department/[id]"
+        options={{ headerShown: true, title: '' }}
+      />
+      <Stack.Screen
         name="user/[id]"
         options={{ headerShown: true, title: '' }}
       />

@@ -4,18 +4,17 @@ import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedView } from '@/components/themed-view';
-import UserSelectScreen from '@/screens/UserSelectScreen';
-import { SelectUser } from '@/types';
+import DepartmentSelectScreen from '@/screens/DepartmentSelectScreen';
+import { Department } from '@/types';
 import { StatusBar } from 'expo-status-bar';
 
 export default function HomeScreen() {
-  const handleSelectUser = (user: SelectUser) => {
+  const handleSelectDepartment = (department: Department) => {
     router.push({
-      pathname: '/user/[id]',
+      pathname: '/department/[id]',
       params: {
-        id: String(user.id),
-        firstName: user.firstName,
-        lastName: user.lastName,
+        id: String(department.id),
+        name: department.name,
       },
     });
   };
@@ -24,7 +23,7 @@ export default function HomeScreen() {
     <ThemedView style={styles.container}>
       <StatusBar style="auto" />
       <SafeAreaView style={styles.safeArea}>
-        <UserSelectScreen onSelectUser={handleSelectUser} />
+        <DepartmentSelectScreen onSelectDepartment={handleSelectDepartment} />
       </SafeAreaView>
     </ThemedView>
   );

@@ -10,10 +10,42 @@ export interface PaginationMeta {
   totalPages: number;
 }
 
+export type ActiveInspection = {
+  id: number;
+  title: string;
+} | null;
 
-export type UsersSelectResponse = {
-  data: SelectUser[];
+export type Department = {
+  id: number;
+  name: string;
+  code: string;
+  userCount: number;
+};
+
+export type DepartmentsSummary = {
+  totalUsers: number;
+  totalDevices: number;
+  checkedDevices: number;
+  remainingDevices: number;
+  auditPercent: number;
+};
+
+export type DepartmentsResponse = {
+  data: Department[];
+  summary: DepartmentsSummary;
+  activeInspection: ActiveInspection;
+};
+
+export type DepartmentUser = SelectUser & {
+  totalDevices: number;
+  checkedDevices: number;
+  auditPercent: number;
+};
+
+export type DepartmentUsersResponse = {
+  data: DepartmentUser[];
   meta: PaginationMeta;
+  activeInspection: ActiveInspection;
 };
 
 export type DeviceStatus =
@@ -44,10 +76,14 @@ export interface Devices {
   purchaseDate: string;
   warrantyUntil: string;
 
-  status: "active" | "inactive" | "broken" | string;
+  status: DeviceStatus;
   condition: "excellent" | "good" | "fair" | "poor" | string;
 
-  note: string;
+  isVerified: boolean;
+  lastVerifiedAt: string | null;
+  deviceInfo: string | null;
+
+  note: string | null;
 
   createdAt: string;
   updatedAt: string;
@@ -86,15 +122,14 @@ export interface Devices {
 
   currentUser: {
     id: number;
-    full_name: string;
+    firstName: string;
+    lastName: string;
+    employeeId: string | null;
     email: string;
-    phone_number: string;
   } | null;
 }
 
-export type UserDevicesResponse = {
-  data: Devices[];
-};
+export type UserDevicesResponse = Devices[];
 
 export type VerifyBarcodeResponse = {
   success: boolean;
